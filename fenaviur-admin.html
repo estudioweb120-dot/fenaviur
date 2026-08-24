@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Administración — FENAVIUR</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* =====================================================================
+   CONFIGURACIÓN — esto lo llena el equipo de FENAVIUR una sola vez
+   (ver las constantes SUPABASE_URL y SUPABASE_ANON_KEY en el <script>
+   al final de este archivo)
+   ===================================================================== */
+:root{
+  --azul-profundo:#122A54; --azul-vivo:#2C6FCB; --dorado:#E8A93A;
+  --crema:#FBF8F2; --crema2:#F3EEE3; --tinta:#1B2233; --tinta-suave:#5B6478;
+  --linea:#E4DFD2; --verde:#2E7D53; --rojo:#C23B3B; --blanco:#fff;
+  --radio:12px; --f-ui:'Sora',sans-serif; --f-cuerpo:'Inter',sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-family:var(--f-cuerpo); background:var(--crema); color:var(--tinta); min-height:100vh;}
+button{font-family:inherit; cursor:pointer;}
+input, select, textarea{font-family:inherit;}
+a{color:inherit;}
+
+/* ---------- Pantalla de login ---------- */
+#pantallaLogin{
+  min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
+  background:radial-gradient(circle at 20% 10%, #1c3d73, var(--azul-profundo));
+}
+.caja-login{
+  background:var(--blanco); border-radius:16px; padding:44px 38px; width:100%; max-width:400px;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,0.4);
+}
+.caja-login h1{font-family:var(--f-ui); font-size:22px; color:var(--azul-profundo); margin-bottom:4px;}
+.caja-login p.sub{color:var(--tinta-suave); font-size:13.5px; margin-bottom:28px;}
+.campo{margin-bottom:16px;}
+.campo label{display:block; font-size:12px; font-weight:600; color:var(--tinta-suave); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em; font-family:var(--f-ui);}
+.campo input, .campo select, .campo textarea{
+  width:100%; padding:12px 14px; border:1.5px solid var(--linea); border-radius:9px; font-size:14.5px;
+  background:var(--crema); transition:border-color .2s;
+}
+.campo input:focus, .campo select:focus, .campo textarea:focus{outline:none; border-color:var(--azul-vivo); background:#fff;}
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px; font-family:var(--f-ui); font-weight:700;
+  font-size:14px; padding:12px 22px; border-radius:9px; border:none; transition:all .2s;
+}
+.btn-primario{background:var(--dorado); color:var(--azul-profundo); width:100%;}
+.btn-primario:hover{filter:brightness(1.05);}
+.btn-secundario{background:var(--crema2); color:var(--azul-profundo);}
+.btn-peligro{background:#FCE9E9; color:var(--rojo);}
+.btn-chico{padding:8px 14px; font-size:12.5px; border-radius:7px;}
+.error-login{color:var(--rojo); font-size:13px; margin-top:6px; display:none;}
+
+/* ---------- Layout del panel ---------- */
+#panel{display:none; min-height:100vh; grid-template-columns:250px 1fr;}
+#panel.activo{display:grid;}
+.barra-lateral{
+  background:var(--azul-profundo); color:#fff; padding:26px 18px; display:flex; flex-direction:column;
+  position:sticky; top:0; height:100vh;
+}
+.marca-panel{font-family:var(--f-ui); font-weight:800; font-size:18px; margin-bottom:2px;}
+.marca-panel span{color:var(--dorado);}
+.marca-panel small{display:block; font-size:11px; font-weight:500; color:rgba(255,255,255,0.55); margin-top:2px; margin-bottom:30px;}
+.nav-panel button{
+  display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:none;
+  color:rgba(255,255,255,0.78); padding:11px 12px; border-radius:9px; font-size:14px; font-weight:600;
+  margin-bottom:3px; transition:background .2s;
+}
+.nav-panel button:hover{background:rgba(255,255,255,0.06);}
+.nav-panel button.activo{background:rgba(232,169,58,0.16); color:var(--dorado);}
+.nav-panel .badge{margin-left:auto; background:var(--rojo); color:#fff; font-size:10.5px; padding:2px 7px; border-radius:100px; min-width:18px; text-align:center;}
+.pie-lateral{margin-top:auto; padding-top:20px; border-top:1px solid rgba(255,255,255,0.1);}
+.pie-lateral .correo{font-size:12px; color:rgba(255,255,255,0.55); margin-bottom:10px; word-break:break-all;}
+
+.contenido-panel{padding:34px 40px; overflow-y:auto; height:100vh;}
+.encabezado-vista{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:26px; flex-wrap:wrap; gap:14px;}
+.encabezado-vista h2{font-family:var(--f-ui); font-size:24px; color:var(--azul-profundo);}
+.encabezado-vista p{color:var(--tinta-suave); font-size:13.5px; margin-top:4px;}
+
+.tarjeta{background:var(--blanco); border:1px solid var(--linea); border-radius:var(--radio); padding:26px;}
+.tabla-envoltura{overflow-x:auto;}
+table{width:100%; border-collapse:collapse; font-size:13.5px;}
+th{text-align:left; color:var(--tinta-suave); font-family:var(--f-ui); font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; padding:10px 12px; border-bottom:2px solid var(--linea);}
+td{padding:12px; border-bottom:1px solid var(--linea); vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+.pill{display:inline-block; padding:4px 11px; border-radius:100px; font-size:11.5px; font-weight:700; font-family:var(--f-ui);}
+.pill-verde{background:#E4F3EA; color:var(--verde);}
+.pill-gris{background:var(--crema2); color:var(--tinta-suave);}
+.pill-dorado{background:#FCF0DA; color:#946618;}
+.pill-rojo{background:#FCE9E9; color:var(--rojo);}
+.acciones-fila{display:flex; gap:6px;}
+.icono-btn{background:none; border:1px solid var(--linea); border-radius:7px; padding:6px 9px; font-size:12px; color:var(--tinta-suave);}
+.icono-btn:hover{background:var(--crema2);}
+
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+.grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
+@media (max-width:720px){.grid-2, .grid-3{grid-template-columns:1fr;}}
+
+.modal-fondo{
+  position:fixed; inset:0; background:rgba(18,26,44,0.55); display:none; align-items:flex-start; justify-content:center;
+  padding:40px 20px; overflow-y:auto; z-index:1000;
+}
+.modal-fondo.activo{display:flex;}
+.modal{background:#fff; border-radius:16px; padding:32px; width:100%; max-width:600px;}
+.modal h3{font-family:var(--f-ui); color:var(--azul-profundo); font-size:19px; margin-bottom:20px;}
+.modal-acciones{display:flex; justify-content:flex-end; gap:10px; margin-top:22px;}
+
+.vacio{text-align:center; padding:50px 20px; color:var(--tinta-suave);}
+.vacio b{display:block; color:var(--azul-profundo); margin-bottom:6px; font-size:15px;}
+
+.tarjetas-resumen{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:28px;}
+.resumen-item{background:#fff; border:1px solid var(--linea); border-radius:var(--radio); padding:20px;}
+.resumen-item .num{font-family:var(--f-ui); font-size:28px; font-weight:800; color:var(--azul-profundo);}
+.resumen-item .lbl{font-size:12.5px; color:var(--tinta-suave); margin-top:2px;}
+
+.toast{
+  position:fixed; bottom:24px; right:24px; background:var(--azul-profundo); color:#fff; padding:14px 20px;
+  border-radius:10px; font-size:13.5px; box-shadow:0 10px 30px -10px rgba(0,0,0,0.4); z-index:2000;
+  display:none; max-width:320px;
+}
+.toast.exito{background:#1e5c3a;}
+.toast.error{background:#7a2323;}
+.vista{display:none;}
+.vista.activa{display:block;}
+.aviso-config{
+  background:#FCF0DA; border:1px solid #F0D497; color:#5c4416; padding:16px 20px; border-radius:10px;
+  font-size:13.5px; margin-bottom:22px; line-height:1.6;
+}
+.subida-img{display:flex; align-items:center; gap:12px; margin-top:6px;}
+.subida-img img{width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--linea); display:none;}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="pantallaLogin">
+  <div class="caja-login">
+    <h1>Panel FENAVIUR</h1>
+    <p class="sub">Inicia sesión con tu usuario de Supabase para administrar el contenido del sitio.</p>
+    <form id="formLogin">
+      <div class="campo"><label>Correo</label><input type="email" id="loginCorreo" required placeholder="tuusuario@fenaviur.org"></div>
+      <div class="campo"><label>Contraseña</label><input type="password" id="loginClave" required placeholder="••••••••"></div>
+      <button type="submit" class="btn btn-primario">Iniciar sesión</button>
+      <div class="error-login" id="errorLogin"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== PANEL ===================== -->
+<div id="panel">
+  <aside class="barra-lateral">
+    <div class="marca-panel">FEN<span>AVIUR</span></div>
+    <small>Panel de administración</small>
+    <nav class="nav-panel" id="navPanel">
+      <button data-vista="resumen" class="activo">📊 Resumen</button>
+      <button data-vista="proyectos">🏗️ Proyectos</button>
+      <button data-vista="publicaciones">📰 Actualidad</button>
+      <button data-vista="organizaciones">🤝 Organizaciones</button>
+      <button data-vista="galeria">🖼️ Galería</button>
+      <button data-vista="vinculaciones">✉️ Vinculación <span class="badge" id="badgeVinc" style="display:none;"></span></button>
+      <button data-vista="mensajes">💬 Mensajes <span class="badge" id="badgeMsj" style="display:none;"></span></button>
+    </nav>
+    <div class="pie-lateral">
+      <div class="correo" id="correoUsuario"></div>
+      <button class="btn btn-secundario btn-chico" id="btnCerrarSesion" style="width:100%;">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main class="contenido-panel">
+
+    <!-- RESUMEN -->
+    <div class="vista activa" id="vista-resumen">
+      <div class="encabezado-vista"><div><h2>Resumen</h2><p>Un vistazo rápido al contenido del sitio.</p></div></div>
+      <div class="tarjetas-resumen" id="cajasResumen"></div>
+      <div class="aviso-config">
+        <b>¿Primera vez aquí?</b> Recuerda que las imágenes se suben directamente desde cada formulario (Proyectos, Actualidad, Galería) — se guardan en Supabase Storage automáticamente.
+      </div>
+    </div>
+
+    <!-- PROYECTOS -->
+    <div class="vista" id="vista-proyectos">
+      <div class="encabezado-vista">
+        <div><h2>Proyectos</h2><p>Iniciativas de FENAVIUR en el territorio.</p></div>
+        <button class="btn btn-primario" onclick="abrirModalProyecto()">+ Nuevo proyecto</button>
+      </div>
+      <div class="tarjeta"><div class="tabla-envoltura"><table>
+        <thead><tr><th>Nombre</th><th>Pilar</th><th>Ubicación</th><th>Estado</th><th>Publicado</th><th></th></tr></thead>
+        <tbody id="tablaProyectos"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- PUBLICACIONES / ACTUALIDAD -->
+    <div class="vista" id="vista-publicaciones">
+      <div class="encabezado-vista">
+        <div><h2>Actualidad</h2><p>Noticias, comunicados, eventos y más.</p></div>
+        <button class="btn btn-primario" onclick="abrirModalPublicacion()">+ Nueva publicación</button>
+      </div>
+      <div class="tarjeta"><div class="tabla-envoltura"><table>
+        <thead><tr><th>Título</th><th>Categoría</th><th>Fecha</th><th>Publicado</th><th></th></tr></thead>
+        <tbody id="tablaPublicaciones"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- ORGANIZACIONES -->
+    <div class="vista" id="vista-organizaciones">
+      <div class="encabezado-vista">
+        <div><h2>Organizaciones</h2><p>Organizaciones federadas a FENAVIUR.</p></div>
+        <button class="btn btn-primario" onclick="abrirModalOrganizacion()">+ Nueva organización</button>
+      </div>
+      <div class="tarjeta"><div class="tabla-envoltura"><table>
+        <thead><tr><th>Nombre</th><th>Tipo</th><th>Municipio</th><th>Activa</th><th></th></tr></thead>
+        <tbody id="tablaOrganizaciones"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- GALERÍA -->
+    <div class="vista" id="vista-galeria">
+      <div class="encabezado-vista">
+        <div><h2>Galería multimedia</h2><p>Fotos y videos generales del sitio.</p></div>
+        <button class="btn btn-primario" onclick="abrirModalGaleria()">+ Agregar imagen</button>
+      </div>
+      <div class="tarjeta"><div class="tabla-envoltura"><table>
+        <thead><tr><th>Vista previa</th><th>Título</th><th>Ubicación</th><th>Publicado</th><th></th></tr></thead>
+        <tbody id="tablaGaleria"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- VINCULACIONES -->
+    <div class="vista" id="vista-vinculaciones">
+      <div class="encabezado-vista"><div><h2>Solicitudes de vinculación</h2><p>Personas u organizaciones que quieren unirse a FENAVIUR.</p></div></div>
+      <div class="tarjeta"><div class="tabla-envoltura"><table>
+        <thead><tr><th>Nombre</th><th>Organización</th><th>Contacto</th><th>Municipio</th><th>Estado</th><th>Fecha</th></tr></thead>
+        <tbody id="tablaVinculaciones"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- MENSAJES -->
+    <div class="vista" id="vista-mensajes">
+      <div class="encabezado-vista"><div><h2>Mensajes de contacto</h2><p>Mensajes enviados desde el formulario de contacto del sitio.</p></div></div>
+      <div class="tarjeta"><div class="tabla-envoltura"><table>
+        <thead><tr><th>Nombre</th><th>Correo</th><th>Mensaje</th><th>Fecha</th><th></th></tr></thead>
+        <tbody id="tablaMensajes"></tbody>
+      </table></div></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===================== MODAL PROYECTO ===================== -->
+<div class="modal-fondo" id="modalProyecto">
+  <div class="modal">
+    <h3 id="tituloModalProyecto">Nuevo proyecto</h3>
+    <form id="formProyecto">
+      <input type="hidden" id="proyectoId">
+      <div class="campo"><label>Nombre del proyecto</label><input type="text" id="proyectoNombre" required></div>
+      <div class="grid-2">
+        <div class="campo"><label>Pilar estratégico</label><select id="proyectoPilar"></select></div>
+        <div class="campo"><label>Estado</label>
+          <select id="proyectoEstado">
+            <option value="planeacion">Planeación</option>
+            <option value="en_curso">En curso</option>
+            <option value="finalizado">Finalizado</option>
+            <option value="pausado">Pausado</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="campo"><label>Departamento</label><select id="proyectoDepartamento"></select></div>
+        <div class="campo"><label>Municipio</label><select id="proyectoMunicipio"></select></div>
+      </div>
+      <div class="campo"><label>Descripción</label><textarea id="proyectoDescripcion" rows="3"></textarea></div>
+      <div class="campo"><label>Objetivo</label><textarea id="proyectoObjetivo" rows="2"></textarea></div>
+      <div class="grid-2">
+        <div class="campo"><label>Fecha de inicio</label><input type="date" id="proyectoFechaInicio"></div>
+        <div class="campo"><label>Fecha de fin</label><input type="date" id="proyectoFechaFin"></div>
+      </div>
+      <div class="campo">
+        <label>Imagen de portada</label>
+        <input type="file" id="proyectoImagenArchivo" accept="image/*">
+        <div class="subida-img"><img id="proyectoImagenPrevia"><span id="proyectoImagenEstado" style="font-size:12.5px; color:var(--tinta-suave);"></span></div>
+      </div>
+      <div class="campo">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="proyectoPublicado" style="width:auto;"> Publicar en el sitio web
+        </label>
+      </div>
+      <div class="modal-acciones">
+        <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalProyecto')">Cancelar</button>
+        <button type="submit" class="btn btn-primario">Guardar proyecto</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== MODAL PUBLICACIÓN ===================== -->
+<div class="modal-fondo" id="modalPublicacion">
+  <div class="modal">
+    <h3 id="tituloModalPublicacion">Nueva publicación</h3>
+    <form id="formPublicacion">
+      <input type="hidden" id="publicacionId">
+      <div class="campo"><label>Título</label><input type="text" id="publicacionTitulo" required></div>
+      <div class="grid-2">
+        <div class="campo"><label>Categoría</label><select id="publicacionCategoria"></select></div>
+        <div class="campo"><label>Fecha de publicación</label><input type="date" id="publicacionFecha"></div>
+      </div>
+      <div class="campo"><label>Resumen</label><textarea id="publicacionResumen" rows="2"></textarea></div>
+      <div class="campo"><label>Contenido completo</label><textarea id="publicacionContenido" rows="5"></textarea></div>
+      <div class="campo">
+        <label>Imagen de portada</label>
+        <input type="file" id="publicacionImagenArchivo" accept="image/*">
+        <div class="subida-img"><img id="publicacionImagenPrevia"><span id="publicacionImagenEstado" style="font-size:12.5px; color:var(--tinta-suave);"></span></div>
+      </div>
+      <div class="campo">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="publicacionPublicado" style="width:auto;"> Publicar en el sitio web
+        </label>
+      </div>
+      <div class="modal-acciones">
+        <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalPublicacion')">Cancelar</button>
+        <button type="submit" class="btn btn-primario">Guardar publicación</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== MODAL ORGANIZACIÓN ===================== -->
+<div class="modal-fondo" id="modalOrganizacion">
+  <div class="modal">
+    <h3 id="tituloModalOrganizacion">Nueva organización</h3>
+    <form id="formOrganizacion">
+      <input type="hidden" id="organizacionId">
+      <div class="campo"><label>Nombre</label><input type="text" id="organizacionNombre" required></div>
+      <div class="grid-2">
+        <div class="campo"><label>Tipo de organización</label><select id="organizacionTipo"></select></div>
+        <div class="campo"><label>Departamento</label><select id="organizacionDepartamento"></select></div>
+      </div>
+      <div class="campo"><label>Municipio</label><select id="organizacionMunicipio"></select></div>
+      <div class="grid-2">
+        <div class="campo"><label>Nombre de contacto</label><input type="text" id="organizacionContactoNombre"></div>
+        <div class="campo"><label>Teléfono de contacto</label><input type="text" id="organizacionContactoTelefono"></div>
+      </div>
+      <div class="campo">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="organizacionActiva" checked style="width:auto;"> Organización activa
+        </label>
+      </div>
+      <div class="modal-acciones">
+        <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalOrganizacion')">Cancelar</button>
+        <button type="submit" class="btn btn-primario">Guardar organización</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== MODAL GALERÍA ===================== -->
+<div class="modal-fondo" id="modalGaleria">
+  <div class="modal">
+    <h3>Agregar a la galería</h3>
+    <form id="formGaleria">
+      <div class="campo"><label>Título</label><input type="text" id="galeriaTitulo"></div>
+      <div class="grid-2">
+        <div class="campo"><label>Tipo</label><select id="galeriaTipo"><option value="foto">Foto</option><option value="video">Video</option></select></div>
+        <div class="campo"><label>Ubicación</label><input type="text" id="galeriaUbicacion" placeholder="Ej: Apartadó, Antioquia"></div>
+      </div>
+      <div class="campo">
+        <label>Archivo (foto o video)</label>
+        <input type="file" id="galeriaArchivo" accept="image/*,video/mp4" required>
+        <div class="subida-img"><img id="galeriaImagenPrevia"><span id="galeriaImagenEstado" style="font-size:12.5px; color:var(--tinta-suave);"></span></div>
+      </div>
+      <div class="modal-acciones">
+        <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalGaleria')">Cancelar</button>
+        <button type="submit" class="btn btn-primario">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   1) CONFIGURACIÓN — PEGAR AQUÍ LOS DATOS DE TU PROYECTO DE SUPABASE
+   =====================================================================
+   Los encuentras en: Supabase → tu proyecto → Settings → API
+   - "Project URL"          → SUPABASE_URL
+   - "anon public" API key  → SUPABASE_ANON_KEY
+   ===================================================================== */
+const SUPABASE_URL = 'PEGA_AQUI_TU_PROJECT_URL';
+const SUPABASE_ANON_KEY = 'PEGA_AQUI_TU_ANON_KEY';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ===================== UTILIDADES ===================== */
+function mostrarToast(mensaje, tipo=''){
+  const t = document.getElementById('toast');
+  t.textContent = mensaje;
+  t.className = 'toast ' + tipo;
+  t.style.display = 'block';
+  setTimeout(()=>{ t.style.display='none'; }, 3800);
+}
+function abrirModal(id){ document.getElementById(id).classList.add('activo'); }
+function cerrarModal(id){ document.getElementById(id).classList.remove('activo'); }
+function formatoFecha(f){ if(!f) return '—'; return new Date(f).toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'}); }
+
+async function subirArchivo(bucket, archivo){
+  const nombreArchivo = `${Date.now()}-${archivo.name.replace(/\s+/g,'-')}`;
+  const { error } = await sb.storage.from(bucket).upload(nombreArchivo, archivo);
+  if(error) throw error;
+  const { data } = sb.storage.from(bucket).getPublicUrl(nombreArchivo);
+  return data.publicUrl;
+}
+
+/* ===================== LOGIN ===================== */
+document.getElementById('formLogin').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const correo = document.getElementById('loginCorreo').value;
+  const clave = document.getElementById('loginClave').value;
+  const errorBox = document.getElementById('errorLogin');
+  errorBox.style.display='none';
+  const { data, error } = await sb.auth.signInWithPassword({ email: correo, password: clave });
+  if(error){
+    errorBox.textContent = 'Correo o contraseña incorrectos.';
+    errorBox.style.display='block';
+    return;
+  }
+  entrarAlPanel(data.user);
+});
+
+async function entrarAlPanel(user){
+  document.getElementById('pantallaLogin').style.display='none';
+  document.getElementById('panel').classList.add('activo');
+  document.getElementById('correoUsuario').textContent = user.email;
+  await cargarCatalogos();
+  await cargarTodo();
+}
+
+document.getElementById('btnCerrarSesion').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  location.reload();
+});
+
+/* Revisar si ya hay una sesión activa al cargar la página */
+(async ()=>{
+  const { data } = await sb.auth.getSession();
+  if(data.session){ entrarAlPanel(data.session.user); }
+})();
+
+/* ===================== NAVEGACIÓN ===================== */
+document.getElementById('navPanel').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-vista]');
+  if(!btn) return;
+  document.querySelectorAll('.nav-panel button').forEach(b=>b.classList.remove('activo'));
+  btn.classList.add('activo');
+  document.querySelectorAll('.vista').forEach(v=>v.classList.remove('activa'));
+  document.getElementById('vista-' + btn.dataset.vista).classList.add('activa');
+});
+
+/* ===================== CATÁLOGOS (para selects) ===================== */
+let CATALOGOS = { departamentos:[], municipios:[], tiposOrganizacion:[], categorias:[], pilares:[] };
+
+async function cargarCatalogos(){
+  const [dep, mun, tipos, cats, pil] = await Promise.all([
+    sb.from('departamentos').select('*').order('nombre'),
+    sb.from('municipios').select('*').order('nombre'),
+    sb.from('tipos_organizacion').select('*').order('nombre'),
+    sb.from('categorias_actualidad').select('*').order('nombre'),
+    sb.from('pilares').select('*').order('numero')
+  ]);
+  CATALOGOS.departamentos = dep.data || [];
+  CATALOGOS.municipios = mun.data || [];
+  CATALOGOS.tiposOrganizacion = tipos.data || [];
+  CATALOGOS.categorias = cats.data || [];
+  CATALOGOS.pilares = pil.data || [];
+
+  llenarSelect('proyectoPilar', CATALOGOS.pilares, p=>p.id, p=>`${p.numero}. ${p.nombre}`, true);
+  llenarSelect('proyectoDepartamento', CATALOGOS.departamentos, d=>d.id, d=>d.nombre, true);
+  llenarSelect('proyectoMunicipio', CATALOGOS.municipios, m=>m.id, m=>m.nombre, true);
+  llenarSelect('publicacionCategoria', CATALOGOS.categorias, c=>c.id, c=>c.nombre, true);
+  llenarSelect('organizacionTipo', CATALOGOS.tiposOrganizacion, t=>t.id, t=>t.nombre, true);
+  llenarSelect('organizacionDepartamento', CATALOGOS.departamentos, d=>d.id, d=>d.nombre, true);
+  llenarSelect('organizacionMunicipio', CATALOGOS.municipios, m=>m.id, m=>m.nombre, true);
+}
+function llenarSelect(id, items, valorFn, textoFn, conVacio){
+  const sel = document.getElementById(id);
+  sel.innerHTML = (conVacio ? '<option value="">— Selecciona —</option>' : '') +
+    items.map(it => `<option value="${valorFn(it)}">${textoFn(it)}</option>`).join('');
+}
+function nombrePorId(lista, id, campo='nombre'){
+  const it = lista.find(x => String(x.id) === String(id));
+  return it ? it[campo] : '—';
+}
+
+/* ===================== CARGA GENERAL ===================== */
+async function cargarTodo(){
+  await Promise.all([
+    cargarProyectos(), cargarPublicaciones(), cargarOrganizaciones(),
+    cargarGaleria(), cargarVinculaciones(), cargarMensajes()
+  ]);
+  actualizarResumen();
+}
+
+function actualizarResumen(){
+  const cajas = [
+    { num: window._conteos?.proyectos ?? 0, lbl: 'Proyectos' },
+    { num: window._conteos?.publicaciones ?? 0, lbl: 'Publicaciones' },
+    { num: window._conteos?.organizaciones ?? 0, lbl: 'Organizaciones' },
+    { num: window._conteos?.galeria ?? 0, lbl: 'Elementos en galería' },
+    { num: window._conteos?.vinculaciones ?? 0, lbl: 'Solicitudes de vinculación' },
+    { num: window._conteos?.mensajes ?? 0, lbl: 'Mensajes de contacto' },
+  ];
+  document.getElementById('cajasResumen').innerHTML = cajas.map(c =>
+    `<div class="resumen-item"><div class="num">${c.num}</div><div class="lbl">${c.lbl}</div></div>`
+  ).join('');
+}
+window._conteos = {};
+
+/* ===================== PROYECTOS ===================== */
+let proyectosCache = [];
+async function cargarProyectos(){
+  const { data, error } = await sb.from('proyectos').select('*').order('creado_en', {ascending:false});
+  if(error){ mostrarToast('Error cargando proyectos: '+error.message, 'error'); return; }
+  proyectosCache = data || [];
+  window._conteos.proyectos = proyectosCache.length;
+  const tbody = document.getElementById('tablaProyectos');
+  if(!proyectosCache.length){ tbody.innerHTML = `<tr><td colspan="6"><div class="vacio"><b>Sin proyectos aún</b>Crea el primero con el botón "+ Nuevo proyecto".</div></td></tr>`; return; }
+  tbody.innerHTML = proyectosCache.map(p => `
+    <tr>
+      <td><b>${p.nombre}</b></td>
+      <td>${nombrePorId(CATALOGOS.pilares, p.pilar_id) || '—'}</td>
+      <td>${nombrePorId(CATALOGOS.municipios, p.municipio_id)}${p.departamento_id ? ', ' + nombrePorId(CATALOGOS.departamentos, p.departamento_id) : ''}</td>
+      <td><span class="pill pill-gris">${p.estado.replace('_',' ')}</span></td>
+      <td>${p.publicado ? '<span class="pill pill-verde">Publicado</span>' : '<span class="pill pill-gris">Borrador</span>'}</td>
+      <td class="acciones-fila">
+        <button class="icono-btn" onclick="editarProyecto('${p.id}')">Editar</button>
+        <button class="icono-btn" onclick="borrarProyecto('${p.id}')">Borrar</button>
+      </td>
+    </tr>`).join('');
+}
+function abrirModalProyecto(){
+  document.getElementById('formProyecto').reset();
+  document.getElementById('proyectoId').value = '';
+  document.getElementById('tituloModalProyecto').textContent = 'Nuevo proyecto';
+  document.getElementById('proyectoImagenPrevia').style.display='none';
+  document.getElementById('proyectoImagenEstado').textContent='';
+  abrirModal('modalProyecto');
+}
+function editarProyecto(id){
+  const p = proyectosCache.find(x=>x.id===id);
+  if(!p) return;
+  document.getElementById('tituloModalProyecto').textContent = 'Editar proyecto';
+  document.getElementById('proyectoId').value = p.id;
+  document.getElementById('proyectoNombre').value = p.nombre || '';
+  document.getElementById('proyectoPilar').value = p.pilar_id || '';
+  document.getElementById('proyectoEstado').value = p.estado || 'planeacion';
+  document.getElementById('proyectoDepartamento').value = p.departamento_id || '';
+  document.getElementById('proyectoMunicipio').value = p.municipio_id || '';
+  document.getElementById('proyectoDescripcion').value = p.descripcion || '';
+  document.getElementById('proyectoObjetivo').value = p.objetivo || '';
+  document.getElementById('proyectoFechaInicio').value = p.fecha_inicio || '';
+  document.getElementById('proyectoFechaFin').value = p.fecha_fin || '';
+  document.getElementById('proyectoPublicado').checked = !!p.publicado;
+  const previa = document.getElementById('proyectoImagenPrevia');
+  if(p.imagen_portada_url){ previa.src = p.imagen_portada_url; previa.style.display='block'; } else { previa.style.display='none'; }
+  abrirModal('modalProyecto');
+}
+async function borrarProyecto(id){
+  if(!confirm('¿Borrar este proyecto? Esta acción no se puede deshacer.')) return;
+  const { error } = await sb.from('proyectos').delete().eq('id', id);
+  if(error){ mostrarToast('Error al borrar: '+error.message, 'error'); return; }
+  mostrarToast('Proyecto eliminado', 'exito');
+  cargarProyectos().then(actualizarResumen);
+}
+document.getElementById('formProyecto').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const id = document.getElementById('proyectoId').value;
+  const archivo = document.getElementById('proyectoImagenArchivo').files[0];
+  let imagenUrl = null;
+  if(archivo){
+    document.getElementById('proyectoImagenEstado').textContent = 'Subiendo imagen...';
+    try{ imagenUrl = await subirArchivo('proyectos', archivo); }
+    catch(err){ mostrarToast('Error subiendo imagen: '+err.message, 'error'); return; }
+  }
+  const registro = {
+    nombre: document.getElementById('proyectoNombre').value,
+    pilar_id: document.getElementById('proyectoPilar').value || null,
+    estado: document.getElementById('proyectoEstado').value,
+    departamento_id: document.getElementById('proyectoDepartamento').value || null,
+    municipio_id: document.getElementById('proyectoMunicipio').value || null,
+    descripcion: document.getElementById('proyectoDescripcion').value,
+    objetivo: document.getElementById('proyectoObjetivo').value,
+    fecha_inicio: document.getElementById('proyectoFechaInicio').value || null,
+    fecha_fin: document.getElementById('proyectoFechaFin').value || null,
+    publicado: document.getElementById('proyectoPublicado').checked,
+    actualizado_en: new Date().toISOString()
+  };
+  if(imagenUrl) registro.imagen_portada_url = imagenUrl;
+
+  let error;
+  if(id){ ({ error } = await sb.from('proyectos').update(registro).eq('id', id)); }
+  else { ({ error } = await sb.from('proyectos').insert(registro)); }
+
+  if(error){ mostrarToast('Error al guardar: '+error.message, 'error'); return; }
+  mostrarToast('Proyecto guardado con éxito', 'exito');
+  cerrarModal('modalProyecto');
+  cargarProyectos().then(actualizarResumen);
+});
+
+/* ===================== PUBLICACIONES / ACTUALIDAD ===================== */
+let publicacionesCache = [];
+function generarSlug(texto){
+  return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9\s-]/g,'').trim().replace(/\s+/g,'-').slice(0,80) + '-' + Date.now().toString().slice(-5);
+}
+async function cargarPublicaciones(){
+  const { data, error } = await sb.from('publicaciones').select('*').order('fecha_publicacion', {ascending:false});
+  if(error){ mostrarToast('Error cargando actualidad: '+error.message, 'error'); return; }
+  publicacionesCache = data || [];
+  window._conteos.publicaciones = publicacionesCache.length;
+  const tbody = document.getElementById('tablaPublicaciones');
+  if(!publicacionesCache.length){ tbody.innerHTML = `<tr><td colspan="5"><div class="vacio"><b>Sin publicaciones aún</b>Crea la primera con el botón "+ Nueva publicación".</div></td></tr>`; return; }
+  tbody.innerHTML = publicacionesCache.map(p => `
+    <tr>
+      <td><b>${p.titulo}</b></td>
+      <td>${nombrePorId(CATALOGOS.categorias, p.categoria_id)}</td>
+      <td>${formatoFecha(p.fecha_publicacion)}</td>
+      <td>${p.publicado ? '<span class="pill pill-verde">Publicado</span>' : '<span class="pill pill-gris">Borrador</span>'}</td>
+      <td class="acciones-fila">
+        <button class="icono-btn" onclick="editarPublicacion('${p.id}')">Editar</button>
+        <button class="icono-btn" onclick="borrarPublicacion('${p.id}')">Borrar</button>
+      </td>
+    </tr>`).join('');
+}
+function abrirModalPublicacion(){
+  document.getElementById('formPublicacion').reset();
+  document.getElementById('publicacionId').value = '';
+  document.getElementById('tituloModalPublicacion').textContent = 'Nueva publicación';
+  document.getElementById('publicacionFecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('publicacionImagenPrevia').style.display='none';
+  document.getElementById('publicacionImagenEstado').textContent='';
+  abrirModal('modalPublicacion');
+}
+function editarPublicacion(id){
+  const p = publicacionesCache.find(x=>x.id===id);
+  if(!p) return;
+  document.getElementById('tituloModalPublicacion').textContent = 'Editar publicación';
+  document.getElementById('publicacionId').value = p.id;
+  document.getElementById('publicacionTitulo').value = p.titulo || '';
+  document.getElementById('publicacionCategoria').value = p.categoria_id || '';
+  document.getElementById('publicacionFecha').value = p.fecha_publicacion || '';
+  document.getElementById('publicacionResumen').value = p.resumen || '';
+  document.getElementById('publicacionContenido').value = p.contenido || '';
+  document.getElementById('publicacionPublicado').checked = !!p.publicado;
+  const previa = document.getElementById('publicacionImagenPrevia');
+  if(p.imagen_portada_url){ previa.src = p.imagen_portada_url; previa.style.display='block'; } else { previa.style.display='none'; }
+  abrirModal('modalPublicacion');
+}
+async function borrarPublicacion(id){
+  if(!confirm('¿Borrar esta publicación?')) return;
+  const { error } = await sb.from('publicaciones').delete().eq('id', id);
+  if(error){ mostrarToast('Error al borrar: '+error.message, 'error'); return; }
+  mostrarToast('Publicación eliminada', 'exito');
+  cargarPublicaciones().then(actualizarResumen);
+}
+document.getElementById('formPublicacion').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const id = document.getElementById('publicacionId').value;
+  const archivo = document.getElementById('publicacionImagenArchivo').files[0];
+  let imagenUrl = null;
+  if(archivo){
+    document.getElementById('publicacionImagenEstado').textContent = 'Subiendo imagen...';
+    try{ imagenUrl = await subirArchivo('publicaciones', archivo); }
+    catch(err){ mostrarToast('Error subiendo imagen: '+err.message, 'error'); return; }
+  }
+  const titulo = document.getElementById('publicacionTitulo').value;
+  const registro = {
+    titulo,
+    categoria_id: document.getElementById('publicacionCategoria').value || null,
+    fecha_publicacion: document.getElementById('publicacionFecha').value || new Date().toISOString().slice(0,10),
+    resumen: document.getElementById('publicacionResumen').value,
+    contenido: document.getElementById('publicacionContenido').value,
+    publicado: document.getElementById('publicacionPublicado').checked,
+    actualizado_en: new Date().toISOString()
+  };
+  if(imagenUrl) registro.imagen_portada_url = imagenUrl;
+
+  let error;
+  if(id){ ({ error } = await sb.from('publicaciones').update(registro).eq('id', id)); }
+  else { registro.slug = generarSlug(titulo); ({ error } = await sb.from('publicaciones').insert(registro)); }
+
+  if(error){ mostrarToast('Error al guardar: '+error.message, 'error'); return; }
+  mostrarToast('Publicación guardada con éxito', 'exito');
+  cerrarModal('modalPublicacion');
+  cargarPublicaciones().then(actualizarResumen);
+});
+
+/* ===================== ORGANIZACIONES ===================== */
+let organizacionesCache = [];
+async function cargarOrganizaciones(){
+  const { data, error } = await sb.from('organizaciones').select('*').order('nombre');
+  if(error){ mostrarToast('Error cargando organizaciones: '+error.message, 'error'); return; }
+  organizacionesCache = data || [];
+  window._conteos.organizaciones = organizacionesCache.length;
+  const tbody = document.getElementById('tablaOrganizaciones');
+  if(!organizacionesCache.length){ tbody.innerHTML = `<tr><td colspan="5"><div class="vacio"><b>Sin organizaciones registradas</b>Agrega la primera con el botón "+ Nueva organización".</div></td></tr>`; return; }
+  tbody.innerHTML = organizacionesCache.map(o => `
+    <tr>
+      <td><b>${o.nombre}</b></td>
+      <td>${nombrePorId(CATALOGOS.tiposOrganizacion, o.tipo_id)}</td>
+      <td>${nombrePorId(CATALOGOS.municipios, o.municipio_id)}</td>
+      <td>${o.activo ? '<span class="pill pill-verde">Activa</span>' : '<span class="pill pill-gris">Inactiva</span>'}</td>
+      <td class="acciones-fila">
+        <button class="icono-btn" onclick="editarOrganizacion('${o.id}')">Editar</button>
+        <button class="icono-btn" onclick="borrarOrganizacion('${o.id}')">Borrar</button>
+      </td>
+    </tr>`).join('');
+}
+function abrirModalOrganizacion(){
+  document.getElementById('formOrganizacion').reset();
+  document.getElementById('organizacionId').value = '';
+  document.getElementById('tituloModalOrganizacion').textContent = 'Nueva organización';
+  abrirModal('modalOrganizacion');
+}
+function editarOrganizacion(id){
+  const o = organizacionesCache.find(x=>x.id===id);
+  if(!o) return;
+  document.getElementById('tituloModalOrganizacion').textContent = 'Editar organización';
+  document.getElementById('organizacionId').value = o.id;
+  document.getElementById('organizacionNombre').value = o.nombre || '';
+  document.getElementById('organizacionTipo').value = o.tipo_id || '';
+  document.getElementById('organizacionDepartamento').value = o.departamento_id || '';
+  document.getElementById('organizacionMunicipio').value = o.municipio_id || '';
+  document.getElementById('organizacionContactoNombre').value = o.nombre_contacto || '';
+  document.getElementById('organizacionContactoTelefono').value = o.telefono_contacto || '';
+  document.getElementById('organizacionActiva').checked = !!o.activo;
+  abrirModal('modalOrganizacion');
+}
+async function borrarOrganizacion(id){
+  if(!confirm('¿Borrar esta organización?')) return;
+  const { error } = await sb.from('organizaciones').delete().eq('id', id);
+  if(error){ mostrarToast('Error al borrar: '+error.message, 'error'); return; }
+  mostrarToast('Organización eliminada', 'exito');
+  cargarOrganizaciones().then(actualizarResumen);
+}
+document.getElementById('formOrganizacion').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const id = document.getElementById('organizacionId').value;
+  const registro = {
+    nombre: document.getElementById('organizacionNombre').value,
+    tipo_id: document.getElementById('organizacionTipo').value || null,
+    departamento_id: document.getElementById('organizacionDepartamento').value || null,
+    municipio_id: document.getElementById('organizacionMunicipio').value || null,
+    nombre_contacto: document.getElementById('organizacionContactoNombre').value,
+    telefono_contacto: document.getElementById('organizacionContactoTelefono').value,
+    activo: document.getElementById('organizacionActiva').checked
+  };
+  let error;
+  if(id){ ({ error } = await sb.from('organizaciones').update(registro).eq('id', id)); }
+  else { ({ error } = await sb.from('organizaciones').insert(registro)); }
+  if(error){ mostrarToast('Error al guardar: '+error.message, 'error'); return; }
+  mostrarToast('Organización guardada con éxito', 'exito');
+  cerrarModal('modalOrganizacion');
+  cargarOrganizaciones().then(actualizarResumen);
+});
+
+/* ===================== GALERÍA ===================== */
+let galeriaCache = [];
+async function cargarGaleria(){
+  const { data, error } = await sb.from('galeria_multimedia').select('*').order('creado_en', {ascending:false});
+  if(error){ mostrarToast('Error cargando galería: '+error.message, 'error'); return; }
+  galeriaCache = data || [];
+  window._conteos.galeria = galeriaCache.length;
+  const tbody = document.getElementById('tablaGaleria');
+  if(!galeriaCache.length){ tbody.innerHTML = `<tr><td colspan="4"><div class="vacio"><b>Galería vacía</b>Agrega la primera imagen o video con el botón "+ Agregar imagen".</div></td></tr>`; return; }
+  tbody.innerHTML = galeriaCache.map(g => `
+    <tr>
+      <td>${g.tipo==='foto' ? `<img src="${g.url}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;">` : '🎬 Video'}</td>
+      <td>${g.titulo || '—'}</td>
+      <td>${g.ubicacion || '—'}</td>
+      <td>${g.publicado ? '<span class="pill pill-verde">Visible</span>' : '<span class="pill pill-gris">Oculto</span>'}</td>
+      <td class="acciones-fila"><button class="icono-btn" onclick="borrarGaleria('${g.id}')">Borrar</button></td>
+    </tr>`).join('');
+}
+function abrirModalGaleria(){
+  document.getElementById('formGaleria').reset();
+  document.getElementById('galeriaImagenPrevia').style.display='none';
+  document.getElementById('galeriaImagenEstado').textContent='';
+  abrirModal('modalGaleria');
+}
+async function borrarGaleria(id){
+  if(!confirm('¿Borrar este elemento de la galería?')) return;
+  const { error } = await sb.from('galeria_multimedia').delete().eq('id', id);
+  if(error){ mostrarToast('Error al borrar: '+error.message, 'error'); return; }
+  mostrarToast('Elemento eliminado', 'exito');
+  cargarGaleria().then(actualizarResumen);
+}
+document.getElementById('formGaleria').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const archivo = document.getElementById('galeriaArchivo').files[0];
+  if(!archivo){ mostrarToast('Selecciona un archivo', 'error'); return; }
+  document.getElementById('galeriaImagenEstado').textContent = 'Subiendo archivo...';
+  let url;
+  try{ url = await subirArchivo('galeria', archivo); }
+  catch(err){ mostrarToast('Error subiendo archivo: '+err.message, 'error'); return; }
+
+  const registro = {
+    tipo: document.getElementById('galeriaTipo').value,
+    titulo: document.getElementById('galeriaTitulo').value,
+    ubicacion: document.getElementById('galeriaUbicacion').value,
+    url, publicado: true
+  };
+  const { error } = await sb.from('galeria_multimedia').insert(registro);
+  if(error){ mostrarToast('Error al guardar: '+error.message, 'error'); return; }
+  mostrarToast('Agregado a la galería', 'exito');
+  cerrarModal('modalGaleria');
+  cargarGaleria().then(actualizarResumen);
+});
+
+/* ===================== VINCULACIONES (solo lectura + estado) ===================== */
+async function cargarVinculaciones(){
+  const { data, error } = await sb.from('solicitudes_vinculacion').select('*').order('creado_en', {ascending:false});
+  if(error){ mostrarToast('Error cargando solicitudes: '+error.message, 'error'); return; }
+  const lista = data || [];
+  window._conteos.vinculaciones = lista.length;
+  const nuevas = lista.filter(v=>v.estado==='nueva').length;
+  const badge = document.getElementById('badgeVinc');
+  if(nuevas>0){ badge.style.display='inline-block'; badge.textContent = nuevas; } else { badge.style.display='none'; }
+
+  const tbody = document.getElementById('tablaVinculaciones');
+  if(!lista.length){ tbody.innerHTML = `<tr><td colspan="6"><div class="vacio"><b>Sin solicitudes por ahora</b>Aquí aparecerán los mensajes de "Quiero vincularme" del sitio web.</div></td></tr>`; return; }
+  tbody.innerHTML = lista.map(v => `
+    <tr>
+      <td><b>${v.nombre}</b></td>
+      <td>${v.organizacion || '—'}</td>
+      <td>${v.correo}<br><span style="color:var(--tinta-suave);">${v.telefono || ''}</span></td>
+      <td>${v.municipio || '—'} ${v.departamento ? ', '+v.departamento : ''}</td>
+      <td>
+        <select onchange="actualizarEstadoVinculacion('${v.id}', this.value)" style="padding:6px 8px; border-radius:7px; border:1px solid var(--linea); font-size:12.5px;">
+          <option value="nueva" ${v.estado==='nueva'?'selected':''}>Nueva</option>
+          <option value="contactada" ${v.estado==='contactada'?'selected':''}>Contactada</option>
+          <option value="vinculada" ${v.estado==='vinculada'?'selected':''}>Vinculada</option>
+          <option value="descartada" ${v.estado==='descartada'?'selected':''}>Descartada</option>
+        </select>
+      </td>
+      <td>${formatoFecha(v.creado_en)}</td>
+    </tr>`).join('');
+}
+async function actualizarEstadoVinculacion(id, estado){
+  const { error } = await sb.from('solicitudes_vinculacion').update({estado}).eq('id', id);
+  if(error){ mostrarToast('Error al actualizar: '+error.message, 'error'); return; }
+  mostrarToast('Estado actualizado', 'exito');
+  cargarVinculaciones();
+}
+
+/* ===================== MENSAJES DE CONTACTO ===================== */
+async function cargarMensajes(){
+  const { data, error } = await sb.from('mensajes_contacto').select('*').order('creado_en', {ascending:false});
+  if(error){ mostrarToast('Error cargando mensajes: '+error.message, 'error'); return; }
+  const lista = data || [];
+  window._conteos.mensajes = lista.length;
+  const noLeidos = lista.filter(m=>!m.leido).length;
+  const badge = document.getElementById('badgeMsj');
+  if(noLeidos>0){ badge.style.display='inline-block'; badge.textContent = noLeidos; } else { badge.style.display='none'; }
+
+  const tbody = document.getElementById('tablaMensajes');
+  if(!lista.length){ tbody.innerHTML = `<tr><td colspan="5"><div class="vacio"><b>Sin mensajes por ahora</b>Aquí aparecerán los mensajes del formulario de contacto del sitio.</div></td></tr>`; return; }
+  tbody.innerHTML = lista.map(m => `
+    <tr style="${m.leido ? '' : 'background:#FCF8ED;'}">
+      <td><b>${m.nombre}</b>${m.telefono ? '<br><span style="color:var(--tinta-suave); font-size:12px;">'+m.telefono+'</span>' : ''}</td>
+      <td>${m.correo}</td>
+      <td style="max-width:320px;">${m.mensaje}</td>
+      <td>${formatoFecha(m.creado_en)}</td>
+      <td>${m.leido ? '<span class="pill pill-gris">Leído</span>' : `<button class="icono-btn" onclick="marcarLeido('${m.id}')">Marcar leído</button>`}</td>
+    </tr>`).join('');
+}
+async function marcarLeido(id){
+  const { error } = await sb.from('mensajes_contacto').update({leido:true}).eq('id', id);
+  if(error){ mostrarToast('Error: '+error.message, 'error'); return; }
+  cargarMensajes();
+}
+</script>
+</body>
+</html>
